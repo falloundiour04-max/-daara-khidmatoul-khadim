@@ -1284,6 +1284,12 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = "https://nvmsaqzufrdmmymmtdsb.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_2yvhJ6lZF5d-Tnjlbx3Vyw_MZHaUYsZ";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+</script>
 <script>
 (async function(){
   const grid = document.getElementById('membersGrid');
@@ -1371,9 +1377,22 @@
 
   async function loadMembers(){
     try{
-      const result = await window.storage.get('members', true);
-      return result ? JSON.parse(result.value) : [];
+      const { data, error } = await sb.from('members').select('*').order('created_at', { ascending: true });
+      if(error) throw error;
+      return (data || []).map(m => ({
+        id: m.id,
+        matricule: m.matricule,
+        nom: m.nom,
+        prenom: m.prenom,
+        dateNaissance: m.date_naissance,
+        profession: m.profession,
+        telephone: m.telephone,
+        adresse: m.adresse,
+        paiementConfirme: m.paiement_confirme,
+        photo: m.photo
+      }));
     }catch(e){
+      console.error(e);
       return [];
     }
   }
@@ -1398,23 +1417,22 @@
       const photo = await resizeImage(file, 320);
       members = await loadMembers();
       const matricule = 'DKK-' + String(members.length + 1).padStart(4, '0');
+      const newId = Date.now().toString(36) + Math.random().toString(36).slice(2,7);
       const newMember = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+        id: newId,
         matricule,
         nom: document.getElementById('mNom').value.trim(),
         prenom: document.getElementById('mPrenom').value.trim(),
-        dateNaissance: document.getElementById('mDateNaissance').value,
+        date_naissance: document.getElementById('mDateNaissance').value || null,
         profession: document.getElementById('mProfession').value.trim(),
         telephone: document.getElementById('mTelephone').value.trim(),
         adresse: document.getElementById('mAdresse').value.trim(),
-        paiementConfirme: document.getElementById('paymentConfirm').checked,
-        paiementMontant: 2000,
-        paiementMode: 'Wave / Orange Money',
+        paiement_confirme: document.getElementById('paymentConfirm').checked,
         photo
       };
-      members.push(newMember);
-      const result = await window.storage.set('members', JSON.stringify(members), true);
-      if(!result){ throw new Error('échec de l\'enregistrement'); }
+      const { error } = await sb.from('members').insert([newMember]);
+      if(error) throw error;
+      members = await loadMembers();
       renderMembers(members);
       form.reset();
       msg.textContent = 'Membre ajouté à l\'annuaire.';
@@ -1562,9 +1580,11 @@
 
   async function loadGallery(){
     try{
-      const result = await window.storage.get('gallery', true);
-      return result ? JSON.parse(result.value) : [];
+      const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: true });
+      if(error) throw error;
+      return data || [];
     }catch(e){
+      console.error(e);
       return [];
     }
   }
@@ -1592,10 +1612,9 @@
         caption: document.getElementById('gCaption').value.trim(),
         photo
       };
+      const { error } = await sb.from('gallery').insert([newPhoto]);
+      if(error) throw error;
       photos = await loadGallery();
-      photos.push(newPhoto);
-      const result = await window.storage.set('gallery', JSON.stringify(photos), true);
-      if(!result){ throw new Error('échec de l\'enregistrement'); }
       renderGallery(photos);
       form.reset();
       msg.textContent = 'Photo ajoutée à la galerie.';
